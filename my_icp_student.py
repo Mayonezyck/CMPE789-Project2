@@ -1,6 +1,6 @@
 import open3d as o3d
 import numpy as np
-from scipy.spatial import cKDTree
+from scipy.spatial import cKDTree, distance
 
 def load_ply(file_path):
     # Load a .ply file using open3d as an numpy.array
@@ -32,7 +32,30 @@ def point_to_plane(source_points, target_points, target_normals):
  
 def compute_transformation(source_points, target_points):
     # Compute the optimal rotation matrix R and translation vector t that align source_points with matched_target_points
-    pass   
+    
+    #print(source_points.shape)
+    # get X0 and y0, theres no weights so its basically just the mean
+    x_0 = source_points.mean(axis=0)
+    y_0 = source_points.mean(axis=0)
+    # solve for H
+    x_n = source_points - x_0
+    y_n = target_points - y_0
+
+    # computing cross covariance matrix based on mean reduced coordinates (according to slides)
+    # use @ operator for matrix multiplication
+    H = x_n.T @ y_n
+
+    # now do singular value decomposition
+    # thank goodness numpy does this for us lol
+    # svd(H) = USVT
+    U, S, VT = np.linalg.svd(H)
+
+    # R = V * UT
+    R = VT.T @ U.T
+
+    # now that we have rotation matrix, get translation vector and should be done
+    t = y_0 - R @ x_0
+    #print(t.shape)
     return R, t
 
 def apply_transformation(source_points, R, t):
@@ -40,22 +63,34 @@ def apply_transformation(source_points, R, t):
     # assuming its a numpy array
     # print(type(source_points))
     # print(source_points)
-    # print(source_points.shape)
-    # print(R.shape)
-    # print(t.shape)
-    # use numpy matrix multiplication
-    new_source_points = np.dot(source_points,R.T) + t
+    #print(source_points.shape)
+    #print(R.shape)
+    #print(t.shape)
+    # use numpy matrix multiplication or dot product
+    new_source_points = source_points @ R.T + t
     return new_source_points
 
 def compute_mean_distance(source, target):
     # Compute the mean Euclidean distance between the source and the target
-    # mean_distance = 
+    # scipy spatial has a function to take care of this which is very nice
+    dist = distance.cdist(source, target, metric="euclidean")
+    mean_distance = np.mean(dist)
     return mean_distance
 
 def calculate_mse(source_points, target_points):
     # Follow the equation in slides 
     # You may find cKDTree.query function helpful to calculate distance between point clouds with different number of points
-    pass
+
+    # if its the same number of points this should be enough
+    if len(source_points) == len(target_points):
+        mse = np.mean(np.sum(target_points-source_points)**2, axis=1)
+    else:
+        # if its not then we got work to do
+        targetTree = cKDTree(target_points)
+        distances, indices = targetTree.query(source_points) 
+        mse = np.mean(distances**2)
+
+
     return mse
 
 
@@ -88,8 +123,8 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
         # If the mean distance is less than the specified tolerance, the algorithm has converged
         if mean_distance < tolerance:
             print("ICP converged after", i + 1, "iterations.")
-        # Return the final rotation matrix, translation vector, and aligned source points
-        return R, t, new_source_points
+            # Return the final rotation matrix, translation vector, and aligned source points
+            return R, t, new_source_points
         
     print("ICP did not converge after", max_iterations, "iterations.") 
     
