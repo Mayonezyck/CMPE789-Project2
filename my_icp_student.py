@@ -134,6 +134,7 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
     # ICP algorithm, return the rotation R and translation t
     for i in range(max_iterations):
         # The number of points may be different in the source and the target, so align them first
+        print("Iteration ", i)
         if strategy == 'closest_point':
             indices = find_closest_points(source_points, target_points)
             matched_target_points = target_points[indices]
@@ -167,12 +168,12 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
     return R, t, aligned_source_points
 
 if __name__ == "__main__":
-    source_file = 'out_one.ply'
-    target_file = 'out_two.ply'
+    source_file = 'out_first.ply'
+    target_file = 'out_second.ply'
     output_file = 'merged.ply'
     
-    #strategy = "closest_point"
-    strategy = "normal_shooting"
+    strategy = "closest_point"
+    #strategy = "normal_shooting"
     
     source_points = load_ply(source_file)
     target_points = load_ply(target_file)
