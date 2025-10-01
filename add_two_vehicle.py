@@ -22,7 +22,7 @@ import carla
 
 import random
 import time
-random.seed(42)
+random.seed(41)
 
 
 def main():
@@ -58,7 +58,7 @@ def main():
         actor_list.append(vehicle)
         time.sleep(2)
         location = vehicle.get_location()
-        location.y += 35
+        location.x -= 35
         location.z += 2
         #vehicle.set_location(location)
         transform = vehicle.get_transform()
@@ -73,12 +73,23 @@ def main():
         lidar_bp.set_attribute('channels', '32')
         lidar_bp.set_attribute('range', '100')
         lidar_bp.set_attribute('points_per_second', '100000')
-        lidar_bp.set_attribute('rotation_frequency', '360')
+        lidar_bp.set_attribute('rotation_frequency', '10')
         lidar_tf = carla.Transform(carla.Location(x=1.5, z=2.4))
         lidar = world.spawn_actor(lidar_bp, lidar_tf, attach_to=vehicle)
         actor_list.append(lidar)
         
-        lidar.listen(lambda point_cloud: point_cloud.save_to_disk('tutorial/new_lidar_output/%.6d.ply' % point_cloud.frame))
+        lidar.listen(lambda point_cloud: point_cloud.save_to_disk('tutorial/new_lidar_output_one/%.6d.ply' % point_cloud.frame))
+        # Second Lidar
+        lidar_two_bp = world.get_blueprint_library().find('sensor.lidar.ray_cast')
+        lidar_two_bp.set_attribute('channels', '32')
+        lidar_two_bp.set_attribute('range', '100')
+        lidar_two_bp.set_attribute('points_per_second', '100000')
+        lidar_two_bp.set_attribute('rotation_frequency', '10')
+        lidar_two_tf = carla.Transform(carla.Location(x=1.5, z=2.4))
+        lidar = world.spawn_actor(lidar_two_bp, lidar_two_tf, attach_to=vehicle_two)
+        actor_list.append(lidar)
+        
+        lidar.listen(lambda point_cloud: point_cloud.save_to_disk('tutorial/new_lidar_output_two/%.6d.ply' % point_cloud.frame))
         
         time.sleep(50)
         
@@ -87,6 +98,7 @@ def main():
 
         print('destroying actors')
         #camera.destroy()
+        lidar.destroy()
         client.apply_batch([carla.command.DestroyActor(x) for x in actor_list])
         print('done.')
 
