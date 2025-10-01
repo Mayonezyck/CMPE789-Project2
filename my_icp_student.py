@@ -21,11 +21,43 @@ def estimate_normals(points, k_neighbors=30):
     Use open3d to do it, e.g. estimate_normals()
     k_neighbors: The number of nearest neighbors to consider when estimating normals (you can change the value)
     """
-    # o3d.estimate_normals()
-    return
+    #kdtree = cKDTree(points)
+    # have to convert to o3d point cloud since it doesnt work with kdtree
+    source_cloud = o3d.geometry.PointCloud()
+    source_cloud.points = o3d.utility.Vector3dVector(points)
+
+    source_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=k_neighbors))
+    norms = np.asarray(source_cloud.normals)
+    return norms
 
 def normal_shooting(source_points, source_normals, target_points, target_normals):
-    pass
+    # project along normal, intersect other point set to find a correspondence
+    # TODO: this diesn't use the target normals because i dont know how to use them
+    # making ckdtree of points
+    target_tree = cKDTree(target_points)
+    # start with normal array since dont know how many points it will be
+    matched_target_points = []
+    step_size = 0.01
+    max_dist  = 2
+    num_steps = int(max_dist / step_size) # i.e. 2 / 0.01 = 200
+
+    # have to loop through the points and normals at the same time
+    for pt, norm in zip(source_points, source_normals):
+        # for every point and normal, find a bunch of points along their norms
+        points = [pt + step_size * currentStep * norm for currentStep in range(num_steps)]
+        npPoints = np.array(points)
+        # find the distance from target tree to these points
+        distances, indices = target_tree.query(npPoints)
+        # this gets index at closest point
+        # you cant actually use indices object for this (i tried)
+        closest_point_index = np.argmin(distances)
+        # gets the closest point and adds it to the array
+        closest_point = target_points[indices[closest_point_index]]
+        matched_target_points.append(closest_point)
+
+    # returns closest points
+    return np.array(matched_target_points)
+
 
 def point_to_plane(source_points, target_points, target_normals):
     pass
@@ -107,6 +139,9 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
             matched_target_points = target_points[indices]
             pass
         elif strategy == 'normal_shooting':
+            source_norms = estimate_normals(source_points)
+            target_norms = estimate_normals(target_points)
+            matched_target_points = normal_shooting(source_points, source_norms, target_points, target_norms)
             pass
         elif strategy == "point-to-plane":
             pass
@@ -128,14 +163,16 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
         
     print("ICP did not converge after", max_iterations, "iterations.") 
     
-    aligned_source_points = source_points
+    aligned_source_points = new_source_points
     return R, t, aligned_source_points
 
 if __name__ == "__main__":
     source_file = 'out_one.ply'
     target_file = 'out_two.ply'
     output_file = 'merged.ply'
-    strategy = "closest_point"
+    
+    #strategy = "closest_point"
+    strategy = "normal_shooting"
     
     source_points = load_ply(source_file)
     target_points = load_ply(target_file)
