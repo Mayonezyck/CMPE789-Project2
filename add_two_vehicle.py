@@ -58,7 +58,7 @@ def main():
         actor_list.append(vehicle)
         time.sleep(2)
         location = vehicle.get_location()
-        location.x -= 10
+        location.x -= 20
         location.z += 2
         #vehicle.set_location(location)
         transform = vehicle.get_transform()

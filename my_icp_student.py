@@ -1,12 +1,15 @@
 import open3d as o3d
 import numpy as np
-from scipy.spatial import cKDTree, distance
+from scipy.spatial import cKDTree, distance, transform
 
 def load_ply(file_path):
     # Load a .ply file using open3d as an numpy.array
     loaded_pc = o3d.io.read_point_cloud(file_path)
-
+    #print(f"Loaded {file_path}: {len(loaded_pc.points)} points")
+    #pc_downsampled = loaded_pc.voxel_down_sample(voxel_size=4)
+    #print(f"Downsampled: {len(pc_downsampled.points)} points")
     point_cloud = np.asarray(loaded_pc.points)
+    #print(f"Downsampled: {len(pc_downsampled.points)} points")
     # return np.array
     return point_cloud
 
@@ -66,16 +69,27 @@ def compute_transformation(source_points, target_points):
     # Compute the optimal rotation matrix R and translation vector t that align source_points with matched_target_points
     
     #print(source_points.shape)
+    #print(target_points.shape)
     # get X0 and y0, theres no weights so its basically just the mean
-    x_0 = source_points.mean(axis=0)
-    y_0 = source_points.mean(axis=0)
-    # solve for H
+    
+    #x_0 = source_points.mean(axis=0)
+    #y_0 = target_points.mean(axis=0)
+
+    # weighting based on centroid might help
+    centroid = np.mean(source_points, axis=0)
+    weights = np.linalg.norm(source_points-centroid, axis=1)**2
+    weights = weights / weights.sum()
+    
+    x_0 = np.average(source_points, axis=0, weights=weights)
+    y_0 = np.average(target_points, axis=0, weights=weights)
     x_n = source_points - x_0
     y_n = target_points - y_0
 
     # computing cross covariance matrix based on mean reduced coordinates (according to slides)
     # use @ operator for matrix multiplication
+    # solve for H
     H = x_n.T @ y_n
+    H = (x_n * weights[:, None]).T @ y_n
 
     # now do singular value decomposition
     # thank goodness numpy does this for us lol
@@ -86,7 +100,7 @@ def compute_transformation(source_points, target_points):
     R = VT.T @ U.T
 
     # now that we have rotation matrix, get translation vector and should be done
-    t = y_0 - R @ x_0
+    t = y_0 - (R @ x_0)
     #print(t.shape)
     return R, t
 
@@ -105,8 +119,14 @@ def apply_transformation(source_points, R, t):
 def compute_mean_distance(source, target):
     # Compute the mean Euclidean distance between the source and the target
     # scipy spatial has a function to take care of this which is very nice
-    dist = distance.cdist(source, target, metric="euclidean")
-    mean_distance = np.mean(dist)
+    # dist = distance.cdist(source, target, metric="euclidean")
+    # mean_distance = np.mean(dist)
+
+    # or just use CKDTree the same as the others
+    tree = cKDTree(target)
+    distances, indices = tree.query(source, k=1)
+    mean_distance = np.mean(distances)
+    print(mean_distance)
     return mean_distance
 
 def calculate_mse(source_points, target_points):
@@ -115,15 +135,17 @@ def calculate_mse(source_points, target_points):
 
     # if its the same number of points this should be enough
     if len(source_points) == len(target_points):
-        mse = np.mean(np.sum(target_points-source_points)**2, axis=1)
+        #print("I'm in here!")
+        mse = np.mean(np.sum((target_points-source_points)**2, axis=1))
     else:
         # if its not then we got work to do
+        print("I'm in here!")
         targetTree = cKDTree(target_points)
-        distances, indices = targetTree.query(source_points) 
+        distances, indices = targetTree.query(source_points, k=1) 
         mse = np.mean(distances**2)
 
-
     return mse
+
 
 
 def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init=None, t_init=None, strategy="closest_point"):
@@ -161,6 +183,7 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
             print("ICP converged after", i + 1, "iterations.")
             # Return the final rotation matrix, translation vector, and aligned source points
             return R, t, new_source_points
+        source_points = new_source_points
         
     print("ICP did not converge after", max_iterations, "iterations.") 
     
@@ -168,20 +191,33 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
     return R, t, aligned_source_points
 
 if __name__ == "__main__":
-    source_file = 'out_first.ply'
-    target_file = 'out_second.ply'
-    output_file = 'merged.ply'
     
-    strategy = "closest_point"
-    #strategy = "normal_shooting"
+    
+    #strategy = "closest_point"
+    strategy = "normal_shooting"
+    #strategy = "point-to-plane"
+
+    source_file = 'v1.ply'
+    target_file = 'v2.ply'
+    output_file = f'v1v2_{strategy}.ply'
     
     source_points = load_ply(source_file)
     target_points = load_ply(target_file)
     
     # Initial guess (modifiable)
-    R_init = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-    t_init = np.array([0, 0, 0])
-    
+    #R_init = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    #t_init = np.array([0, 0, 0])
+
+    max_translate = 0
+    max_rotation = 0
+
+    r = transform.Rotation.from_euler('xyz', np.random.uniform(-max_rotation, max_rotation, 3), degrees=True)
+    R_init = r.as_matrix()
+    t_init = np.random.uniform(-max_translate, max_translate, 3)
+    print("Initial Rotation Matrix:")
+    print(R_init)
+    print("Initial Translation Vector:")
+    print(t_init)
     print("Starting ICP...")
     R, t, aligned_source_points = icp(source_points, target_points, R_init=R_init, t_init=t_init, strategy=strategy)
     
@@ -207,5 +243,6 @@ if __name__ == "__main__":
     source_pcd_aligned.points = o3d.utility.Vector3dVector(aligned_source_points)
     
     target_pcd = o3d.io.read_point_cloud(target_file)
+    #target_pcd = target_pcd.voxel_down_sample(voxel_size=2)
     o3d.visualization.draw_geometries([source_pcd_aligned.paint_uniform_color([0, 0, 1]), target_pcd.paint_uniform_color([1, 0, 0])],
                                       window_name='ICP Visualization')

@@ -1,1 +1,6 @@
 tutorial/
+mergers/
+*.ply
+!v1.ply
+!v2.ply
+!v3.ply
