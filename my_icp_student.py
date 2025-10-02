@@ -114,6 +114,40 @@ def compute_transformation(source_points, target_points):
     #print(t.shape)
     return R, t
 
+def compute_transformation_point_to_plane(source_points, target_points, target_normals):
+    # project point-to-point onto the direction of the normal, shot from the found point
+    # trying to minimize point to plane error
+    # gonna form the linear system Ax = b.
+    A = []
+    b = []
+
+    for source_pt, target_pt, norm in zip(source_points, target_points, target_normals):
+        # X x n
+        crossProd = np.cross(source_pt, norm) # p_i x n_i T
+
+        A.append(np.hstack((crossProd, norm))) # [p_i x n_i, n_i T] 
+
+        b.append(-np.dot(norm, source_pt - target_pt)) # -n_i*(p_i-q_i)
+
+    # have to solve Ax = b now. solve for x
+    # thank god for numpy 
+    x, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+
+    # this gives the angle and translation in a 6 dimensional vector
+    # [angle_x, angle_y, angle_z, move_x, move_y, move_z]
+    w = x[:3]
+    t = x[3:]
+
+    # to make R we have to put it in the matrix manually
+    # R = identity matrix plus the skew matrix
+    R = np.array([[1, -w[2], w[1]],
+                 [w[2], 1, -w[0]],
+                 [-w[1], w[0], 1]])
+    
+
+    return R, t
+
+
 def apply_transformation(source_points, R, t):
     # Apply the rotation R and translation t to the source points
     # assuming its a numpy array
@@ -178,14 +212,17 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
             pass
         elif strategy == "point-to-plane":
             target_norms = estimate_normals(target_points)
-            matched_target_points = point_to_plane(source_points, target_points, source_norms)
+            matched_target_points, matched_target_normals = point_to_plane(source_points, target_points, target_norms)
             pass
         else:
             raise ValueError("Invalid strategy. Choose 'closest_point', 'normal_shooting', or 'point_to_plane'")
         
         # Complete the rest of code using source_points and matched_target_points
         # Step 2: Compute the best transformation R and t
-        R, t = compute_transformation(source_points, matched_target_points)
+        if strategy == "point-to-plane":        
+            R, t = compute_transformation_point_to_plane(source_points, matched_target_points, matched_target_normals)
+        else:
+            R, t = compute_transformation(source_points, matched_target_points, strategy)
         # Step 3: Apply the computed transformation (R, t) to the source points
         new_source_points = apply_transformation(source_points, R, t)
         # Step 4: Calculate the “error”
@@ -206,8 +243,8 @@ if __name__ == "__main__":
     
     
     #strategy = "closest_point"
-    strategy = "normal_shooting"
-    #strategy = "point-to-plane"
+    #strategy = "normal_shooting"
+    strategy = "point-to-plane"
 
     source_file = 'v3.ply'
     target_file = f'v1v2_{strategy}.ply'
