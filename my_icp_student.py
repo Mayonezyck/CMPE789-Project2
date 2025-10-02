@@ -144,7 +144,6 @@ def compute_transformation_point_to_plane(source_points, target_points, target_n
                  [w[2], 1, -w[0]],
                  [-w[1], w[0], 1]])
     
-
     return R, t
 
 
@@ -190,6 +189,15 @@ def calculate_mse(source_points, target_points):
 
     return mse
 
+def calculate_ptop_error(source_points, target_points, target_norms):
+    diffs = source_points - target_points
+    dot = np.sum(diffs * target_norms, axis=1)
+    ptop_error = np.mean(dot ** 2)
+    print(ptop_error)
+    return ptop_error
+
+
+
 
 
 def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init=None, t_init=None, strategy="closest_point"):
@@ -222,11 +230,15 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
         if strategy == "point-to-plane":        
             R, t = compute_transformation_point_to_plane(source_points, matched_target_points, matched_target_normals)
         else:
-            R, t = compute_transformation(source_points, matched_target_points, strategy)
+            R, t = compute_transformation(source_points, matched_target_points)
         # Step 3: Apply the computed transformation (R, t) to the source points
         new_source_points = apply_transformation(source_points, R, t)
         # Step 4: Calculate the “error”
-        mean_distance = compute_mean_distance(new_source_points, matched_target_points)
+
+        if strategy == "point-to-plane":
+            mean_distance = calculate_ptop_error(new_source_points, matched_target_points, matched_target_normals)
+        else:
+            mean_distance = compute_mean_distance(new_source_points, matched_target_points)
         # If the mean distance is less than the specified tolerance, the algorithm has converged
         if mean_distance < tolerance:
             print("ICP converged after", i + 1, "iterations.")
@@ -241,10 +253,13 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
 
 if __name__ == "__main__":
     
-    
     #strategy = "closest_point"
     #strategy = "normal_shooting"
     strategy = "point-to-plane"
+
+    # source_file = 'v1.ply'
+    # target_file = 'v2.ply'
+    # output_file = f'v1v2_{strategy}.ply'
 
     source_file = 'v3.ply'
     target_file = f'v1v2_{strategy}.ply'
@@ -257,7 +272,7 @@ if __name__ == "__main__":
     #R_init = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
     #t_init = np.array([0, 0, 0])
 
-    max_translate = 0
+    max_translate = 3
     max_rotation = 0
 
     r = transform.Rotation.from_euler('xyz', np.random.uniform(-max_rotation, max_rotation, 3), degrees=True)
@@ -275,7 +290,19 @@ if __name__ == "__main__":
     print(R)
     print("Translation Vector:")
     print(t)
+    
+    # have to use different error metric if point to plane - see slides
+    # if strategy == "point-to-plane":
+    #     # need target norms
+    #     target_norms = estimate_normals(target_points)
+    #     diff = target_points - aligned_source_points
+    #     distances = np.sum(diff * target_norms, axis=1)
+    #     mse = np.mean(distances**2)
+    # else:
+    #     mse = calculate_mse(aligned_source_points, target_points)
+
     mse = calculate_mse(aligned_source_points, target_points)
+
     print(f"Mean Squared Error (MSE): {mse}")
     
     # Combine aligned source and target points
