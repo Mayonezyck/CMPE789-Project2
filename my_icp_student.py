@@ -63,7 +63,17 @@ def normal_shooting(source_points, source_normals, target_points, target_normals
 
 
 def point_to_plane(source_points, target_points, target_normals):
-    pass
+    # still finding closest points, but now using point to plane as the metric
+    #target_tree = cKDTree(target_points)
+    #distances, indices = target_tree.query(source_points)
+    # closest_target_points = target_points[indices]
+
+    # oh wait we can just use the function we already have for this
+    indices = find_closest_points(source_points, target_points)
+    closest_target_points = target_points[indices]
+    closest_target_normals = target_normals[indices]
+
+    return closest_target_points, closest_target_normals
  
 def compute_transformation(source_points, target_points):
     # Compute the optimal rotation matrix R and translation vector t that align source_points with matched_target_points
@@ -88,7 +98,7 @@ def compute_transformation(source_points, target_points):
     # computing cross covariance matrix based on mean reduced coordinates (according to slides)
     # use @ operator for matrix multiplication
     # solve for H
-    H = x_n.T @ y_n
+    #H = x_n.T @ y_n
     H = (x_n * weights[:, None]).T @ y_n
 
     # now do singular value decomposition
@@ -167,6 +177,8 @@ def icp(source_points, target_points, max_iterations=100, tolerance=1e-6, R_init
             matched_target_points = normal_shooting(source_points, source_norms, target_points, target_norms)
             pass
         elif strategy == "point-to-plane":
+            target_norms = estimate_normals(target_points)
+            matched_target_points = point_to_plane(source_points, target_points, source_norms)
             pass
         else:
             raise ValueError("Invalid strategy. Choose 'closest_point', 'normal_shooting', or 'point_to_plane'")
@@ -197,9 +209,9 @@ if __name__ == "__main__":
     strategy = "normal_shooting"
     #strategy = "point-to-plane"
 
-    source_file = 'v1.ply'
-    target_file = 'v2.ply'
-    output_file = f'v1v2_{strategy}.ply'
+    source_file = 'v3.ply'
+    target_file = f'v1v2_{strategy}.ply'
+    output_file = f'v1v2v3_{strategy}.ply'
     
     source_points = load_ply(source_file)
     target_points = load_ply(target_file)

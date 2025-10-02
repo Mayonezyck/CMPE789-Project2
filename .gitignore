@@ -4,3 +4,9 @@ mergers/
 !v1.ply
 !v2.ply
 !v3.ply
+!v1v2_closest_point.ply
+!v1v2_normal_shooting.ply
+!v1v2_point_to_plane.ply
+!v1v2v3_closest_point.ply
+!v1v2v3_normal_shooting.ply
+!v1v2v3_point_to_plane.ply
